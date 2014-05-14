@@ -22,6 +22,10 @@ io.sockets.on('connection', function (socket) {
 
     socket.on('icecandidate', function(data){
 
+// socket offer then answer, then 
+// store ice candidate of host
+
+
 	// if this is the first one with this room-id
 	if(data.room in rooms) return;
 	rooms[data.room] = data.candidate;
@@ -30,12 +34,13 @@ io.sockets.on('connection', function (socket) {
     });
 
     socket.on('offer', function(data){
-
 	// if this is the first one with this room-id
-	if(data.room in offers) return;
-	offers[data.room] = data.offer;
+	if(''+data.room.id+'||'+data.fbid in offers) return;
+	offers[''+data.room.id+'||'+data.fbid] = data;
 
-	socket.broadcast.emit('offer', offers[data.room]);
+// only to the host room
+	io.sockets.socket(rooms[data.room.id].host)
+	    .emit('offer', offers[''+data.room+'||'+data.fbid]);
     });
 
     socket.on('answer', function(data){
@@ -47,10 +52,32 @@ io.sockets.on('connection', function (socket) {
 	socket.broadcast.emit('answer', answers[data.room]);
     });
 
-});
 
-app.get('/rooms', function(req, res){
-    res.json({rooms:rooms});
+    socket.on('listrooms', function(data){
+
+//check data.auth
+
+	return io.sockets.socket(socket.id).emit({rooms:rooms});
+    });
+
+    socket.on('makeroom', function(data){
+	
+//check data.auth
+// use fbid as room -> therefore each person can have only one room at once
+// he can close his room as he pleases though to start a new one
+
+	if(data.room.id in rooms)
+	    return io.sockets.socket(socket.id).emit('err', {err:'duplicate-room'});
+
+	rooms[data.room.id] = {room:data.room, host:socket.id};
+
+	socket.join(data.room.id);
+
+	return io.sockets.socket(socket.id).emit({room_created:data.room});
+    });
+
+
+
 });
 
 app.get('*', function(req, res){
